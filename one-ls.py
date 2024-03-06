@@ -124,39 +124,33 @@ class LanguageServer:
             return
 
         script = os.path.join(LS_PATH,self.os_name,n) + self.os_ext
-        #print(script)
-        #print(params)
         self.lsproc[(n,port)] = subprocess.Popen([self.os_shell,script]+params,shell=False,**ioargs)
-        #print(self.lsproc[(n,port)].pid)
         if is_pipe:
             start_new_thread(self.write_client,(conn,self.lsproc[(n,port)]))
             start_new_thread(self.read_client,(conn,self.lsproc[(n,port)]))
 
+        
     # You can use socket.makefile() to create a file object from a socket, but on windows the file object isn't a
     # proper file descriptor. So we have to do this manually.
     def write_client(self,conn,proc):
         while self.is_running:
             try:
-                buf = os.read(proc.stdout.fileno(),4096)
-                print("++ " + buf.decode())
+                buf = os.read(proc.stdout.fileno(),2048)
                 if not buf: break
                 conn.send(buf)
             except:
                 break
-        #print("end write")
         self.close_connections(conn,proc)
 
     def read_client(self,conn,proc):
         while self.is_running:
             try:
-                buf = conn.recv(4096)
-                print("-- " + buf.decode())
+                buf = conn.recv(2048)
                 if not buf: break
                 proc.stdin.write(buf)
                 proc.stdin.flush()
             except:
                 break
-        #print("end read")
         self.close_connections(conn,proc)
         self.kill_func(proc)
 

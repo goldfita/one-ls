@@ -2,4 +2,4 @@ param(
     [String]$ls_path,
     [string]$executable)
 
-& npx "${executable}" start --clientProcessId=0
+& "${ls_path}\ls-rust\rust-analyzer.exe"
