@@ -9,7 +9,11 @@ if ($client_host) {
     $client = "-DCLIENT_HOST=${client_host}", "-DCLIENT_PORT=${client_port}"
 }
 
-& "${ls_path}\ls-jdk\bin\java.exe" `
+# These should be set in Windows
+#$env:JAVA_HOME="${ls_path}\jdk"
+#$env:PATH="${ls_path}\jdk\bin;$env:PATH"
+
+&"${ls_path}\ls-jdk\bin\java.exe" `
   @client `
   "-DwatchParentProcess=false" `
   "-Declipse.application=org.eclipse.jdt.ls.core.id1" `
