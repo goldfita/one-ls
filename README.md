@@ -119,16 +119,16 @@ server.
 The language server communicates over stdio and `one-ls` will forward IO back to the client. The opening
 string sent to `one-ls`:
 
-`language server name>::`
+`language server name>::EONELS\n\n\n\n`
 
 ## S
 
 The client connects to the language server on a given port.
 
-`<language server name>::<port #>`
+`<language server name>::<port #>EONELS\n\n\n\n`
 
 ## C
 
 The language server connects back to the client on a given port.
 
-`<language server name>:<host name>:<port #>`
+`<language server name>:<host name>:<port #>EONELS\n\n\n\n`

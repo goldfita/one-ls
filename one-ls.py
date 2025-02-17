@@ -35,6 +35,7 @@ class LanguageServer:
     os_name = "linux"
     os_ext = ".sh"
     os_shell = "sh"
+    END_OF_INIT_MESSAGE = 'EONELS\n\n\n\n'
 
     def __init__(self,kill,child,log,os_name):
         self.kill_func = kill
@@ -87,19 +88,28 @@ class LanguageServer:
             self.kill_func(proc)
                     
     def start(self,conn,addr):
-        init_msg = conn.recv(256).decode()
-        if not init_msg: return
-        
-        data = init_msg.lower().split(':')
-        if len(data) != 3:
-            self.log_func(f"Invalid init message ({data}).")
+        init_msg = conn.recv(8192)
+        if not init_msg:
+            self.log_func(f"No data")
             return
-        n,host,port = data
 
+        init_data = init_msg[:256].decode().split(self.END_OF_INIT_MESSAGE)
+        data = init_data[0].lower().split(':')
+        init_data_len = len(init_data[0]) + len(self.END_OF_INIT_MESSAGE)
+        if len(data) != 3 or not init_msg[:init_data_len].decode().endswith(self.END_OF_INIT_MESSAGE):
+            self.log_func(f"Invalid init message: ({init_msg[:init_data_len]})")
+            return
+
+        start_buf = init_msg[init_data_len:]
+        n,host,port = data
+        if port and not port.isdecimal():
+            self.log_func(f"Invalid port: {port}")
+            return
+        
         self.lsexec = self.__read("exec.conf")
                 
         if self.lsexec.get(n):
-            self.log_func(f"Language Server {addr}: {n}\nExec: {self.lsexec.get(n)}\nLS_PATH: {LS_PATH}\nShell: {self.os_shell}")
+            self.log_func(f"Language Server {addr}: {n}\nExec: {self.lsexec.get(n)}\nLS_PATH: {LS_PATH}\nShell: {self.os_shell}\nInit: {data}")
         else:
             self.log_func(f"No server {n} found in conf file.")
             return
@@ -135,7 +145,7 @@ class LanguageServer:
         self.lsproc[(n,port)].child_pids = []
         if is_pipe:
             start_new_thread(self.write_client,(conn,self.lsproc[(n,port)]))
-            start_new_thread(self.read_client,(conn,(n,port)))
+            start_new_thread(self.read_client,(conn,(n,port),start_buf))
 
         
     # You can use socket.makefile() to create a file object from a socket, but on windows the file object isn't a
@@ -156,22 +166,18 @@ class LanguageServer:
         self.close_connections(conn,proc)
         #self.log_func(f"Write end {proc.args}")
 
-    def read_client(self,conn,key):
+    def read_client(self,conn,key,start_buf):
         # It should be possible to pipe socket output directly into subprocess stdin, but this fails with bad
         # file handle. Gemini says the flag WSA_FLAG_OVERLAPPED needs to be omitted, but there doesn't appear
         # to be any way to do this.
         proc = self.lsproc[key]
-        lastbuf = b''
+        lastbuf = start_buf
+        buf = b''
         while self.is_running:
             try:
-                buf = conn.recv(8192)
-                #self.log_func(f"Read: {buf}")
-                # attempt to get the child process before it terminates so we can kill the grandchildren
-                if not proc.child_pids:
-                    proc.child_pids = self.child_func(proc.pid)
-                if not buf: break
-                # Feeble attempt at making sure we send only complete messages to the language server. Xmlls
-                # sometimes fails on an incomplete init message. This is not guaranteed to work.
+                # Feeble attempt at making sure we send only complete messages to the language server. This is
+                # not guaranteed to work. Note that the init message needs to be passed to the server
+                # immediately or everything will be blocked.
                 if lastbuf or self.exactly_one_message_received(buf):
                     proc.stdin.write(lastbuf+buf)
                     proc.stdin.flush()
@@ -179,6 +185,12 @@ class LanguageServer:
                 else:
                     #self.log_func(f"LS received incomplete client message: {buf}")
                     lastbuf = buf
+                buf = conn.recv(8192)
+                #self.log_func(f"Read ({key}): {buf}")
+                # attempt to get the child process before it terminates so we can kill the grandchildren
+                if not proc.child_pids:
+                    proc.child_pids = self.child_func(proc.pid)
+                if not buf: break
             except:
                 self.log_func(f"Read exception: {proc.args}")
                 break
